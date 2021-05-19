@@ -1,0 +1,8 @@
+TODO
+=====
+DONE         CREATED      DESCRIPTION
+-          : 2021-05-19 : watch live.json with fs.watch
+-          : 2021-05-19 : pub/sub for log
+-          : 2021-05-19 : pub/sub for PGN
+-          : 2021-05-19 : send the full PGN whenever it changes
+-          : 2021-05-19 : only sent the unsent lines of the PGN + some extra header, maybe

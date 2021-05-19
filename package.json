@@ -1,0 +1,22 @@
+{
+  "name": "tcec-server",
+  "version": "1.0.0",
+  "description": "TCEC Server\r ===========",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/octopoulos/tcec-server.git"
+  },
+  "author": "octopoulos",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/octopoulos/tcec-server/issues"
+  },
+  "homepage": "https://github.com/octopoulos/tcec-server#readme",
+  "dependencies": {
+    "yargs": "^17.0.1"
+  }
+}
