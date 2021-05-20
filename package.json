@@ -4,7 +4,8 @@
   "description": "TCEC Server\r ===========",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "start": "node main.js"
   },
   "repository": {
     "type": "git",
@@ -17,6 +18,7 @@
   },
   "homepage": "https://github.com/octopoulos/tcec-server#readme",
   "dependencies": {
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v18.14.0",
     "yargs": "^17.0.1"
   }
 }

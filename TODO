@@ -1,8 +1,12 @@
 TODO
 =====
 DONE         CREATED      DESCRIPTION
--          : 2021-05-19 : watch live.json with fs.watch
+2021-05-19 : 2021-05-19 : use uWebSockets, and certainly NOT socket.io
+2021-05-20 : 2021-05-19 : watch live.json with fs.watch
 -          : 2021-05-19 : pub/sub for log
 -          : 2021-05-19 : pub/sub for PGN
 -          : 2021-05-19 : send the full PGN whenever it changes
 -          : 2021-05-19 : only sent the unsent lines of the PGN + some extra header, maybe
+-          : 2021-05-19 : send the useful lines from the log
+-          : 2021-05-19 : optimise the traffic
+-          : 2021-05-19 : add tests

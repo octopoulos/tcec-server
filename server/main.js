@@ -14,13 +14,37 @@ let {LS} = require('./common.js'),
 
 (async () => {
     let argv = yargs
-        .option('password', {default: '', type: 'string'})
+        .option('live-log', {default: 'live.log', type: 'string'})
+        .option('live-pgn', {default: 'live.pgn', type: 'string'})
+        .option('live-prefix', {default: './', type: 'string'})
         .help()
         .argv;
 
     LS(argv);
 
-    let tcec = new TCEC();
+    let tcec = new TCEC({
+            fasts: [
+                'data.json',
+                'data1.json',
+                // 'live.json',
+                'liveeval.json',
+                'liveeval1.json',
+            ],
+            live_log: argv.liveLog,
+            live_pgn: argv.livePgn,
+            live_prefix: argv.livePrefix,
+            slows: [
+                'banner.txt',
+                'crash.json',
+                'crosstable.json',
+                'enginerating.json',
+                'Eventcrosstable.json',
+                'gamelist.json',
+                'liveengineeval.json',
+                'schedule.json',
+                'tournament.json',
+            ],
+        });
 
     await tcec.initialise({
         dirname: __dirname,
