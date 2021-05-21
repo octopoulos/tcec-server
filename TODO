@@ -1,6 +1,7 @@
 TODO
 =====
 DONE         CREATED      DESCRIPTION
+2021-05-20 : 2021-05-20 : improve watchers
 2021-05-19 : 2021-05-19 : use uWebSockets, and certainly NOT socket.io
 2021-05-20 : 2021-05-19 : watch live.json with fs.watch
 -          : 2021-05-19 : pub/sub for log

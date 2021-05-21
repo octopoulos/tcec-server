@@ -1,6 +1,6 @@
 // server.js
 // @author octopoulo <polluxyz@gmail.com>
-// @version 2021-05-19
+// @version 2021-05-20
 //
 // Base server class
 /*
@@ -48,6 +48,7 @@ class Server {
         this.host = '';                         // https://tcec-chess.com/
         this.index_dir = '';
         this.name = '';                         // TCEC
+        this.num_socket = 0;
         this.server_dir = '';
         this.subscribes = [];
 
@@ -71,11 +72,12 @@ class Server {
             folder = path.join(parent, home);
         if (fs.existsSync(folder))
             this.index_dir = folder;
-        else {
+        else
             this.index_dir = parent;
-            Assign(DEV, DEV_TESTS);
-        }
         this.server_dir = dirname;
+
+        if (!DEV_TESTS.silent)
+            Assign(DEV, DEV_TESTS);
 
         if (dev) {
             Clear(DEV);
@@ -104,6 +106,19 @@ class Server {
 
     // HELPERS
     //////////
+
+    /**
+     * Publish a message shortcut
+     * @param {string} channel
+     * @param {string} key
+     * @param {string} value
+     */
+    publish(channel, key, value) {
+        this.app.publish(channel, Stringify([key, value]), false, true);
+    }
+
+    // IP
+    /////
 
     /**
      * Get the remote IP
@@ -283,7 +298,9 @@ class Server {
         this.app = uWS.App()
         .ws('/api/*', {
             close: socket => {
-                LS('closed socket:', socket.id);
+                this.num_socket --;
+                if (DEV.ws)
+                    LS('closed socket:', socket.id, '/', this.num_socket);
                 socket.dead = true;
             },
             message: async (socket, message, _is_binary) => {
@@ -293,7 +310,7 @@ class Server {
                 else {
                     let json,
                         buffer = Buffer.from(message);
-                    if (DEV.ws)
+                    if (DEV.ws2)
                         LS(buffer.toString());
 
                     try {
@@ -304,13 +321,15 @@ class Server {
                     }
                     if (json) {
                         await this.handle_socket(socket, json);
-                        if (DEV.ws)
+                        if (DEV.ws2)
                             LS(json);
                     }
                 }
             },
             open: async socket => {
-                LS('opened socket');
+                this.num_socket ++;
+                if (DEV.ws)
+                    LS('opened socket', socket_id, '/', this.num_socket);
                 socket.id = socket_id ++;
                 await this.opened_socket(socket);
             },
@@ -354,6 +373,7 @@ class Server {
 /* globals module */
 // <<
 module.exports = {
+    DEV: DEV,
     DEV_TESTS: DEV_TESTS,
     NO_REPLIES: NO_REPLIES,
     Server: Server,

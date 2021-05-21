@@ -1,6 +1,6 @@
 // common.js
 // @author octopoulo <polluxyz@gmail.com>
-// @version 2021-05-19
+// @version 2021-05-20
 //
 // subset of the GUI common.js
 //
@@ -22,6 +22,7 @@ let Assign = Object.assign,
     LS = console.log.bind(console),
     Max = Math.max,
     Min = Math.min,
+    Random = Math.random,
     Round = Math.round,
     Stringify = JSON.stringify.bind(JSON);
 
@@ -71,6 +72,16 @@ function ParseJSON(text, def) {
 }
 
 /**
+ * Random from [low to high[
+ * @param {number=} high
+ * @param {number=} low
+ * @returns {number}
+ */
+function RandomInt(high=1, low=0) {
+    return low + Floor(Random() * (high - low));
+}
+
+/**
  * Same as Python's set_default
  * @param {!Object} dico
  * @param {string} key
@@ -103,6 +114,8 @@ if (typeof exports != 'undefined') {
         Min: Min,
         Now: Now,
         ParseJSON: ParseJSON,
+        Random: Random,
+        RandomInt: RandomInt,
         Round: Round,
         SetDefault: SetDefault,
         Stringify: Stringify,
