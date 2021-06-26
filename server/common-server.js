@@ -1,6 +1,6 @@
 // common-server.js
 // @author octopoulo <polluxyz@gmail.com>
-// @version 2021-05-19
+// @version 2021-06-25
 //
 // used on the server side
 /*
@@ -9,19 +9,20 @@ Buffer, module, require
 */
 'use strict';
 
-let {LS, SetDefault, Stringify} = require('./common.js'),
-    fs = require('fs'),
-    fsa = fs.promises,
+let {DefaultObject, LS, Stringify} = require('./common.js'),
+    fsa = require('fs').promises,
     querystring = require('querystring');
+
+let cache_texts = {};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
  * Check a request
- * @param {!Object} req
+ * @param {uWS.HttpRequest} req
  */
-function check_request(req) {
-    let headers = SetDefault(req, 'headers', {}),
+function checkRequest(req) {
+    let headers = DefaultObject(req, 'headers', {}),
         ip = req.getHeader('x-real-ip');
     headers['x-real-ip'] = ip;
     req.query = querystring.parse(req.getQuery());
@@ -30,40 +31,47 @@ function check_request(req) {
 
 /**
  * Read post data
- * @param {!Object} res
- * @param {boolean} is_json
- * @param {Function} callback
- * @param {Function=} err_callback
+ * @param {uWS.HttpResponse} res
+ * @returns {Promise}
  */
-function read_post(res, is_json, callback, err_callback) {
-    let buffer;
+function readPost(res) {
+    return new Promise((resolve, reject) => {
+        let aborted,
+            buffer = Buffer.allocUnsafe(0);
 
-    // register data callback
-    res.onData((ab, is_last) => {
-        let chunk = Buffer.from(ab);
-        if (is_last) {
-            if (is_json) {
-                let json;
-                try {
-                    json = JSON.parse(buffer? Buffer.concat([buffer, chunk]): chunk);
-                } catch (e) {
-                    LS(e);
-                    res.close();
-                }
-                callback(json);
+        // register data callback
+        res.onData((chunk, is_last) => {
+            if (aborted)
+                return;
+            buffer = Buffer.concat([buffer, Buffer.from(chunk)]);
+            if (is_last) {
+                resolve(buffer);
+                aborted = true;
             }
-            else
-                callback(buffer? Buffer.concat([buffer, chunk]): chunk);
-        }
-        else
-            buffer = Buffer.concat(buffer? [buffer, chunk]: [chunk]);
-    });
+        });
 
-    // register error callback
-    res.onAborted(err_callback? err_callback: () => {
-        LS(`read_post error: ${is_json}`);
-        res.aborted = true;
+        // register error callback
+        res.onAborted(() => {
+            aborted = true;
+            reject('readPost__abort');
+        });
     });
+}
+
+/**
+ * Read the content of a file in utf-8
+ * + use cache
+ * @param {string} filename
+ * @returns {string}
+ */
+async function readTextCached(filename) {
+    let data = cache_texts[filename];
+    if (data)
+        return data;
+
+    data = readTextSafe(filename);
+    cache_texts[filename] = data;
+    return data;
 }
 
 /**
@@ -71,7 +79,7 @@ function read_post(res, is_json, callback, err_callback) {
  * @param {string} filename
  * @returns {string}
  */
-async function read_text_safe(filename) {
+async function readTextSafe(filename) {
     let data = null;
     try {
         data = await fsa.readFile(filename, {encoding: 'utf-8'});
@@ -84,23 +92,22 @@ async function read_text_safe(filename) {
 
 /**
  * Send the response
- * @param {Object} res
- * @param {Object} data
+ * @param {uWS.HttpResponse} res
+ * @param {*} data
  */
-function send_response(res, data) {
-    if (res.aborted) {
-        LS(`response was aborted`);
-        return;
-    }
-    // res.writeHead(200, {'content-type': 'application/json'});
-    res.writeHeader('content-type', 'application/json');
-    res.end(Stringify(data));
+function sendResponse(res, data) {
+    res.cork(() => {
+        res.writeStatus('200 OK');
+        res.writeHeader('content-type', 'application/json');
+        res.end(Stringify(data));
+    });
 }
 
 // exports
 module.exports = {
-    check_request: check_request,
-    read_post: read_post,
-    read_text_safe: read_text_safe,
-    send_response: send_response,
+    checkRequest: checkRequest,
+    readPost: readPost,
+    readTextCached: readTextCached,
+    readTextSafe: readTextSafe,
+    sendResponse: sendResponse,
 };

@@ -1,25 +1,38 @@
 // server.js
 // @author octopoulo <polluxyz@gmail.com>
-// @version 2021-05-20
+// @version 2021-06-25
 //
 // Base server class
+// jshint -W069
 /*
 globals
 Buffer, require
 */
 'use strict';
 
-let {Assign, Clear, Keys, LS, Stringify} = require('./common.js'),
-    {check_request, read_post, send_response} = require('./common-server.js'),
+let {Assign, Clear, Keys, IsArray, IsString, LS, ParseJSON, Stringify} = require('./common.js'),
+    {checkRequest, readPost, sendResponse} = require('./common-server.js'),
     fs = require('fs'),
     path = require('path'),
     uWS = require('uWebSockets.js');
 
 // custom vars
-let DEV = {},
-    DEV_TESTS = {},
+let BACKPRESSURE = 16384,
+    DEV = {},
+    DEV_TESTS = {
+        error: 0,
+        start: 0,
+        subscribe: 0,
+        url: 0,
+        user: 0,
+        ws: 0,
+        ws2: 0,
+        virtual: 0,
+    },
     NO_REPLIES = {
         user_unsubscribe: 1,
+    },
+    NO_SESSIONS = {
     },
     socket_id = 1;
 
@@ -39,34 +52,42 @@ class Server {
     /**
      * Creates an instance of Server
      * @constructor
-     * @param {Array<string>} messages
+     * @param {Object<string, number>} messages
      */
     constructor(messages) {
         this.app = null;
+        this.cache_size = 16 * 1024 * 1024;
         this.default_section = 'home';
         this.guests = {};
+        this.home = '';
         this.host = '';                         // https://tcec-chess.com/
         this.index_dir = '';
         this.name = '';                         // TCEC
         this.num_socket = 0;
+        this.port = 3000;
         this.server_dir = '';
-        this.subscribes = [];
+        this.subscribes = new Set();
 
-        this.message_array = messages;
-        this.message_dico = Assign({}, ...Keys(messages).map((key, id) => [{[key]: id[key]}]));
+        this.message_codes = messages;
+        this.message_methods = Assign({}, ...Keys(messages).map(key => ({[messages[key]]: key})));
     }
 
     /**
      * Initialise the server
      * @param {Object} obj
+     * @param {number=} cache_size
      * @param {Object=} obj.dev {start:1, url:1}
      * @param {string} obj.dirname absolute server directory
      * @param {string=} obj.home relative home directory for index.html
      * @param {string=} obj.host https://tcec-chess.com
-     * @param {string=} obj.name
+     * @param {string=} obj.name name for the email
+     * @param {number=} obj.port
      * @param {Array<string>=} obj.subscribes automatic subscriptions
+     * @param {Object=} obj.ws_options
      */
-    async initialise({dev, dirname, home, host='', name, subscribes=[]}={}) {
+    async initialise({
+            cache_size, dev, dirname, home, host='', name, port, subscribes=[], ws_options={},
+        }={}) {
         // home dir
         let parent = path.dirname(dirname),
             folder = path.join(parent, home);
@@ -74,6 +95,7 @@ class Server {
             this.index_dir = folder;
         else
             this.index_dir = parent;
+        this.home = home;
         this.server_dir = dirname;
 
         if (!DEV_TESTS.silent)
@@ -88,20 +110,25 @@ class Server {
             LS(DEV);
         }
 
+        if (cache_size !== undefined)
+            this.cache_size = cache_size;
         this.host = host;
         this.name = name;
-        this.subscribes = subscribes;
+        if (port)
+            this.port = port;
+        this.subscribes = new Set(subscribes);
+        this.ws_options = ws_options;
 
         // custom
-        await this.initialise_after();
+        await this.initialiseAfter();
     }
 
     /**
      * Extra initialisation steps
      */
-    async initialise_after() {
+    async initialiseAfter() {
         if (DEV.virtual)
-            LS('initialise_after');
+            LS('initialiseAfter');
     }
 
     // HELPERS
@@ -135,7 +162,7 @@ class Server {
     /**
      * User subscription
      * @param {Object} query
-     * @param {WebSocket} socket
+     * @param {uWS.WebSocket} socket
      * @returns {Array<Object>|undefined}
      */
     async user_subscribe(query, socket) {
@@ -145,26 +172,35 @@ class Server {
         if (query.clear)
             this.user_unsubscribe(null, socket);
 
-        let channels = query.channels || [];
+        let channels = query.channels || [],
+            topics = new Set(socket.getTopics());
         for (let channel of channels)
-            socket.subscribe(channel);
+            if (!topics.has(channel))
+                socket.subscribe(channel);
 
+        if (DEV.subscribe)
+            LS('topics=', socket.getTopics());
         return channels;
     }
 
     /**
      * User unsubscribe
      * @param {Object} _query
-     * @param {WebSocket} socket
+     * @param {uWS.WebSocket} socket
      */
     async user_unsubscribe(_query, socket) {
         if (!socket)
             return;
-        socket.unsubscribeAll();
+
+        let topics = new Set(socket.getTopics());
+        for (let topic of topics)
+            if (!this.subscribes.has(topic))
+                socket.unsubscribe(topic);
 
         // default subscriptions
         for (let subscribe of this.subscribes)
-            socket.subscribe(subscribe);
+            if (!topics.has(subscribe))
+                socket.subscribe(subscribe);
     }
 
     // SERVER
@@ -173,10 +209,10 @@ class Server {
     /**
      * Handle any request, JSON or DATA
      * @param {string} type api, up
-     * @param {Request} req
-     * @param {Response} res
+     * @param {uWS.HttpRequest} req
+     * @param {uWS.HttpResponse} res
      */
-    async handle_request(type, req, res) {
+    async handleRequest(type, req, res) {
         // 0) build the query
         let json;
         if (type == 'api')
@@ -186,36 +222,67 @@ class Server {
             json.data = req.body;
         }
 
+        let key, query;
+        if (IsArray(json)) {
+            key = json[0];
+            query = json[1];
+        }
+        else if (IsString(json)) {
+            let pos = json.indexOf(' ');
+            if (pos > 0) {
+                key = parseInt(json.slice(0, pos));
+                query = json.slice(pos + 1);
+            }
+            else
+                key = parseInt(json);
+
+            if (isNaN(key)) {
+                sendResponse(res, [-1, 0, {}]);
+                return;
+            }
+        }
+        else {
+            key = json.key;
+            query = json;
+        }
+
         // 1) check if valid
         let invalid = false,
-            key = json[0],
-            method = this.message_array[key],
-            query = json[1] || {};
+            method = this.message_methods[key],
+            no_session = NO_SESSIONS[method];
 
         if (!method || !this[method]) {
             if (DEV.url)
                 LS(`unknown method: ${key}/${method}`, json);
-            send_response(res, [-1, 0, {key: key, method: method}]);
+            sendResponse(res, [-1, 0, {key: key, method: method}]);
             return;
         }
 
-        // 2) dispatch the message
+        query = query || {};
         query.ip = req.headers['x-real-ip'];
+
+        // 2) need session?
+        if (!no_session) {
+        }
+
+        // 3) dispatch the message
         let data, err;
         try {
             data = await this[method](query);
         }
         catch (e) {
             err = e;
+            if (DEV.error)
+                LS(err);
         }
 
         // no reply needed?
         if (NO_REPLIES[method]) {
-            send_response(res, []);
+            sendResponse(res, []);
             return;
         }
 
-        // 3) assemble the result
+        // 4) assemble the result: [key, data, error, invalid=logout]
         let result = [key, data];
         if (err)
             result.push(err);
@@ -227,41 +294,52 @@ class Server {
         }
 
         // 5) send the response
-        send_response(res, result);
+        sendResponse(res, result);
     }
 
     /**
      * Handle a socket message
-     * @param {WebSocket} socket
-     * @param {!Object} json [key, query]
+     * @param {uWS.WebSocket} socket
+     * @param {Object|string=} key could be a [key, query] itself
+     * @param {Object|string=} query
      */
-    async handle_socket(socket, json) {
+    async handleSocket(socket, key, query) {
         // 1) check if valid
+        if (!query && IsArray(key)) {
+            query = key[1] || {};
+            key = key[0];
+        }
+
         let invalid = false,
-            key = json[0],
-            method = this.message_array[key],
-            query = json[1] || {};
+            method = this.message_methods[key],
+            no_session = NO_SESSIONS[method];
 
         if (!method || !this[method]) {
             if (DEV.url)
-                LS(`unknown method: ${key}/${method}`, json);
+                LS(`handleSocket__unknown: ${key}/${method}`, key, query);
             return;
         }
 
-        // 2) dispatch the message
+        // 2) need session?
+        if (!no_session) {
+        }
+
+        // 3) dispatch the message
         let data, err;
         try {
             data = await this[method](query, socket);
         }
         catch (e) {
             err = e;
+            if (DEV.error)
+                LS(err);
         }
 
         // no reply needed?
         if (NO_REPLIES[method] || socket.dead)
             return;
 
-        // 3) assemble the result
+        // 4) assemble the result: [key, data, error, invalid=logout]
         let result = [key, data];
         if (err)
             result.push(err);
@@ -272,21 +350,21 @@ class Server {
             result[3] = invalid;
         }
 
-        // 4) send the response
+        // 5) send the response
         // - socket might be invalid
         try {
             socket.send(Stringify(result));
         }
         catch (e) {
-            LS('handle_socket_error:', socket.id);
+            LS('handleSocket_error:', socket.id);
         }
     }
 
     /**
      * Opened a websocket
-     * @param {!Object} socket
+     * @param {uWS.WebSocket} socket
      */
-    async opened_socket(socket) {
+    async openedSocket(socket) {
     }
 
     /**
@@ -294,75 +372,104 @@ class Server {
      * + listen on port 3000
      * + receive the messages
      */
-    start_server() {
+    startServer() {
         this.app = uWS.App()
-        .ws('/api/*', {
+        .ws('/api/*', Assign({}, this.ws_options, {
+            open: async socket => {
+                this.num_socket ++;
+                if (DEV.ws)
+                    LS('opened socket', socket_id, '/', this.num_socket);
+                socket.id = socket_id ++;
+                await this.openedSocket(socket);
+            },
+            message: async (socket, message, is_binary) => {
+                // a) binary
+                if (is_binary) {
+                    let vector = new Uint8Array(message);
+                    if (vector.length == 1)
+                        socket.send(message, true);
+                }
+                else {
+                    let key, query,
+                        buffer = Buffer.from(message);
+                    if (DEV.ws2)
+                        LS(buffer.toString());
+
+                    // b) array: [5, "data is here"]
+                    let text = buffer.toString();
+                    if (text[0] == '[') {
+                        let json = ParseJSON(text);
+                        if (json) {
+                            key = json[0];
+                            query = json[1];
+                        }
+                    }
+                    // c) string: "5 data is here"
+                    else {
+                        let pos = text.find(' ');
+                        if (pos > 0) {
+                            key = parseInt(text.slice(0, pos));
+                            query = text.slice(pos + 1);
+                        }
+                        else
+                            key = parseInt(text);
+
+                        if (isNaN(key))
+                            return;
+                    }
+
+                    if (key) {
+                        await this.handleSocket(socket, key, query);
+                        if (DEV.ws2)
+                            LS(key, query);
+                    }
+                }
+            },
+            drain: socket => {
+                LS('drain:', socket.getBufferedAmount(), BACKPRESSURE);
+            },
             close: socket => {
                 this.num_socket --;
                 if (DEV.ws)
                     LS('closed socket:', socket.id, '/', this.num_socket);
                 socket.dead = true;
             },
-            message: async (socket, message, _is_binary) => {
-                let vector = new Uint8Array(message);
-                if (vector[0] == 0)
-                    socket.send(message, true);
-                else {
-                    let json,
-                        buffer = Buffer.from(message);
-                    if (DEV.ws2)
-                        LS(buffer.toString());
-
-                    try {
-                        json = JSON.parse(buffer.toString());
-                    }
-                    catch (e) {
-                        LS(e);
-                    }
-                    if (json) {
-                        await this.handle_socket(socket, json);
-                        if (DEV.ws2)
-                            LS(json);
-                    }
-                }
-            },
-            open: async socket => {
-                this.num_socket ++;
-                if (DEV.ws)
-                    LS('opened socket', socket_id, '/', this.num_socket);
-                socket.id = socket_id ++;
-                await this.opened_socket(socket);
-            },
-        })
+        }))
         .get('/api/*', async (res, req) => {
-            check_request(req);
+            checkRequest(req);
             req.body = req.query;
-            res.onAborted(() => {
-                res.aborted = true;
-                LS('get aborted');
-            });
-            await this.handle_request('api', req, res);
+            await this.handleRequest('api', req, res);
         })
-        .post('/api/*', (res, req) => {
-            check_request(req);
-            read_post(res, true, async json => {
-                req.body = json;
-                await this.handle_request('api', req, res);
-            });
+        .post('/api/*', async (res, req) => {
+            checkRequest(req);
+            try {
+                let data = await readPost(res);
+                req.body = ParseJSON(data);
+                await this.handleRequest('api', req, res);
+            }
+            catch (e) {
+                LS(e);
+                sendResponse(res, [-1, {}, e]);
+            }
         })
-        .post('/up/*', (res, req) => {
-            check_request(req);
-            read_post(res, false, async data => {
+        .post('/up/*', async (res, req) => {
+            checkRequest(req);
+            try {
+                let data = await readPost(res);
                 req.body = data;
-                await this.handle_request('up', req, res);
-            });
+                await this.handleRequest('up', req, res);
+            }
+            catch (e) {
+                LS(e);
+                sendResponse(res, [-1, {}, e]);
+            }
         })
         .get('/*', (res, _req) => {
             res.end('Nothing to see here!!');
         })
-        .listen(3000, token => {
+        .listen(this.port, token => {
             if (DEV.start)
-                LS(`listening on port 3000${token? '': ' ERROR'}`);
+                LS(`listening on port ${this.port}${token? '': ' ERROR'}`);
         });
     }
 }
@@ -376,5 +483,6 @@ module.exports = {
     DEV: DEV,
     DEV_TESTS: DEV_TESTS,
     NO_REPLIES: NO_REPLIES,
+    NO_SESSIONS: NO_SESSIONS,
     Server: Server,
 };

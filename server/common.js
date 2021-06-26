@@ -1,6 +1,6 @@
 // common.js
 // @author octopoulo <polluxyz@gmail.com>
-// @version 2021-05-20
+// @version 2021-06-05
 //
 // subset of the GUI common.js
 //
@@ -38,6 +38,22 @@ function Clear(dico) {
         delete dico[key];
     });
     return dico;
+}
+
+/**
+ * Same as Python's set_default
+ * @param {!Object} dico
+ * @param {string} key
+ * @param {!Object} def
+ * @returns {!Object} dico[key]
+ */
+function DefaultObject(dico, key, def) {
+    let child = dico[key];
+    if (child === undefined) {
+        dico[key] = def;
+        child = dico[key];
+    }
+    return child;
 }
 
 /**
@@ -81,22 +97,6 @@ function RandomInt(high=1, low=0) {
     return low + Floor(Random() * (high - low));
 }
 
-/**
- * Same as Python's set_default
- * @param {!Object} dico
- * @param {string} key
- * @param {*} def
- * @returns {*} dico[key]
- */
-function SetDefault(dico, key, def) {
-    let child = dico[key];
-    if (child === undefined) {
-        dico[key] = def;
-        child = dico[key];
-    }
-    return child;
-}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // <<
@@ -104,6 +104,7 @@ if (typeof exports != 'undefined') {
     Object.assign(exports, {
         Assign: Assign,
         Clear: Clear,
+        DefaultObject: DefaultObject,
         Floor: Floor,
         IsArray: IsArray,
         IsFunction: IsFunction,
@@ -117,7 +118,6 @@ if (typeof exports != 'undefined') {
         Random: Random,
         RandomInt: RandomInt,
         Round: Round,
-        SetDefault: SetDefault,
         Stringify: Stringify,
     });
 }

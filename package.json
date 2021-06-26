@@ -2,23 +2,28 @@
   "name": "tcec-server",
   "version": "1.0.0",
   "description": "TCEC Server\r ===========",
+  "author": "octopoulos",
   "main": "index.js",
-  "scripts": {
-    "test": "jest",
-    "start": "node main.js"
-  },
+  "homepage": "https://github.com/octopoulos/tcec-server#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/octopoulos/tcec-server.git"
   },
-  "author": "octopoulos",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/octopoulos/tcec-server/issues"
   },
-  "homepage": "https://github.com/octopoulos/tcec-server#readme",
   "dependencies": {
-    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v18.14.0",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v19.2.0",
     "yargs": "^17.0.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "advanced": "py ./script/__main__.py --sync --advanced --force",
+    "clean": "py ./script/__main__.py --sync --clean",
+    "cook": "py ./script/__main__.py --sync --zip",
+    "inspect": "py ./script/inspector.py",
+    "start": "node server/main.js",
+    "test": "jest"
   }
 }

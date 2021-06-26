@@ -11,3 +11,4 @@ DONE         CREATED      DESCRIPTION
 -          : 2021-05-19 : send the useful lines from the log
 -          : 2021-05-19 : optimise the traffic
 -          : 2021-05-19 : add tests
+-          : 2021-06-25 : cutechess-cli should use WebSockets

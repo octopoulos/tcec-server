@@ -13,15 +13,17 @@ exports
 let MSG_IP_GET = 1,
     MSG_USER_COUNT = 2,
     MSG_USER_SUBSCRIBE = 3,
-    MSG_USER_UNSUBSCRIBE = 4;
+    MSG_USER_UNSUBSCRIBE = 4,
+    //
+    MSG_CUSTOM_LOG = 5,
+    MSG_CUSTOM_PGN = 6;
 
-let MESSAGES = [
-    0,
-    'ip_get',                   // 1
-    'user_count',               // 2
-    'user_subscribe',           // 3
-    'user_unsubscribe',         // 4
-];
+let MESSAGES = {
+    'ip_get': MSG_IP_GET,
+    'user_count': MSG_USER_COUNT,
+    'user_subscribe': MSG_USER_SUBSCRIBE,
+    'user_unsubscribe': MSG_USER_UNSUBSCRIBE,
+};
 
 let VERSION = '20210520';
 
@@ -31,6 +33,8 @@ let VERSION = '20210520';
 if (typeof exports != 'undefined') {
     Object.assign(exports, {
         MESSAGES: MESSAGES,
+        MSG_CUSTOM_LOG: MSG_CUSTOM_LOG,
+        MSG_CUSTOM_PGN: MSG_CUSTOM_PGN,
         MSG_USER_COUNT: MSG_USER_COUNT,
         VERSION: VERSION,
     });

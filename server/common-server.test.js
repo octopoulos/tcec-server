@@ -1,6 +1,6 @@
 // common-server.test.js
 // @author octopoulo <polluxyz@gmail.com>
-// @version 2021-05-19
+// @version 2021-06-25
 //
 /*
 globals
@@ -9,11 +9,11 @@ expect, require, test
 'use strict';
 
 let {Assign, IsFunction, Keys} = require('./common.js'),
-    {check_request, read_text_safe} = require('./common-server.js');
+    {checkRequest, readTextCached, readTextSafe} = require('./common-server.js');
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// check_request
+// checkRequest
 [
     [
         {
@@ -31,22 +31,40 @@ let {Assign, IsFunction, Keys} = require('./common.js'),
         },
     ],
 ].forEach(([req, answer], id) => {
-    test(`check_request:${id}`, () => {
-        check_request(req);
+    test(`checkRequest:${id}`, () => {
+        checkRequest(req);
         let dico = Assign({}, ...Keys(req).filter(key => !IsFunction(req[key])).map(key => ({[key]: req[key]})));
         expect(dico).toEqual(answer);
     });
 });
 
-// read_text_safe
+// readTextCached
 [
     ['', null],
-    ['inspect.bat', 'py ./script/inspector.py\n'],
+    ['TODO', 'TODO\n=====\n'],
+    ['TODO', 'TODO\n=====\n'],
 ].forEach(([filename, answer], id) => {
-    test(`read_text_safe:${id}`, async () => {
-        let data = await read_text_safe(filename);
+    test(`readTextCached:${id}`, async () => {
+        let data = await readTextCached(filename);
         if (data)
             data = data.replace(/\r\n/g, '\n');
+        if (answer)
+            data = data.slice(0, answer.length);
+        expect(data).toEqual(answer);
+    });
+});
+
+// readTextSafe
+[
+    ['', null],
+    ['TODO', 'TODO\n=====\n'],
+].forEach(([filename, answer], id) => {
+    test(`readTextSafe:${id}`, async () => {
+        let data = await readTextSafe(filename);
+        if (data)
+            data = data.replace(/\r\n/g, '\n');
+        if (answer)
+            data = data.slice(0, answer.length);
         expect(data).toEqual(answer);
     });
 });

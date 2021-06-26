@@ -1,1 +1,0 @@
-py ./script/inspector.py

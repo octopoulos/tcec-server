@@ -11,7 +11,7 @@ __dirname, Buffer, require
 let {Assign, Keys, LS, Min, Now, RandomInt, Stringify} = require('./common.js'),
     fs = require('fs'),
     fsa = fs.promises,
-    {MESSAGES, MSG_USER_COUNT, VERSION} = require('./global.js'),
+    {MESSAGES, MSG_CUSTOM_LOG, MSG_CUSTOM_PGN, MSG_USER_COUNT, VERSION} = require('./global.js'),
     path = require('path'),
     {DEV, DEV_TESTS, Server} = require('./server.js');
 
@@ -25,18 +25,18 @@ let ALIGN_BLOCK = 64,
     TYPE_SLOW = 16,
     TYPE_SLOWER = 32,
     WATCH_FAST = 1000,
-    WATCH_FASTER = 100,
+    WATCH_FASTER = 160,
+    WATCH_FASTEST = 80,
     WATCH_SLOW = 5000,
     WATCH_SLOWER = 15000,
     WATCHES = {
         // faster
+        pgn: [TYPE_CHANGE | TYPE_ALIGN, WATCH_FASTEST],
         log: [TYPE_CHANGE | TYPE_CHANGE_ONLY, WATCH_FASTER],
-        pgn: [TYPE_CHANGE | TYPE_ALIGN, WATCH_FASTER],
 
         // fast
         'data.json': [TYPE_FAST, WATCH_FAST],
         'data1.json': [TYPE_FAST, WATCH_FAST],
-        // 'live.json': [TYPE_FAST, WATCH_FAST],
         'liveeval.json': [TYPE_FAST, WATCH_FAST],
         'liveeval1.json': [TYPE_FAST, WATCH_FAST],
 
@@ -117,8 +117,8 @@ class TCEC extends Server {
             start: 1,
             url: 1,
             user: 1,
-            watch: 1,
-            watch3: 1,          // PGN
+            // watch: 1,
+            // watch3: 1,          // PGN
             ws: 1,
         });
     }
@@ -216,8 +216,10 @@ class TCEC extends Server {
             ]);
 
         // send
+        if (!result.length)
+            return;
         watch.sent = Now(true);
-        this.publish('log', 'log', result);
+        this.publish('log', MSG_CUSTOM_LOG, result);
     }
 
     /**
@@ -242,7 +244,7 @@ class TCEC extends Server {
             LS('PGN:', watch.position, ':', text);
 
         watch.sent = Now(true);
-        this.publish('pgn', 'pgn', text);
+        this.publish('pgn', MSG_CUSTOM_PGN, text.trim());
     }
 
     /**
@@ -415,8 +417,8 @@ class TCEC extends Server {
      */
     async watchFiles() {
         // 1) real time stuff
-        this.watchFile(this.live_log, watch => this.handleLog(watch));
         this.watchFile(this.live_pgn, watch => this.handlePgn(watch));
+        this.watchFile(this.live_log, watch => this.handleLog(watch));
 
         // 2) everything else
         Keys(this.watches).map(key => {

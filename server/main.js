@@ -1,6 +1,6 @@
 // main.js
 // @author octopoulo <polluxyz@gmail.com>
-// @version 2021-05-20
+// @version 2021-05-26
 //
 /*
 globals
@@ -9,6 +9,7 @@ __dirname, require
 'use strict';
 
 let {TCEC} = require('./tcec.js'),
+    uWS = require('uWebSockets.js'),
     yargs = require('yargs');
 
 (async () => {
@@ -28,7 +29,10 @@ let {TCEC} = require('./tcec.js'),
     await tcec.initialise({
         dirname: __dirname,
         home: 'server',
+        ws_options: {
+            compression: uWS.SHARED_COMPRESSOR,
+        },
     });
 
-    tcec.start_server();
+    tcec.startServer();
 })();

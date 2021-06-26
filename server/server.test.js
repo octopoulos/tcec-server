@@ -1,7 +1,8 @@
 // server.test.js
 // @author octopoulo <polluxyz@gmail.com>
-// @version 2021-05-19
+// @version 2021-06-25
 //
+// jshint -W069
 /*
 globals
 __dirname, afterAll, beforeAll, describe, expect, require, test
@@ -18,10 +19,12 @@ let dummy_request = {
         url: '',
     },
     DummyResponse = function() {
+        this.cork = callback => callback();
         this.data = '';
         this.header = {};
         this.end = data => {if (data) this.data += data;};
         this.writeHeader = (key, value) => {this.header[key] = value;};
+        this.writeStatus = () => {};
         return this;
     },
     DummySocket = function() {
@@ -30,13 +33,13 @@ let dummy_request = {
         this.send = data => {if (data) this.data = data;};
         return this;
     },
-    MESSAGES = [
-        0,
-        'ip_get',                   // 1
-        'user_subscribe',           // 2
-        'user_unsubscribe',         // 3
-    ],
-    MSG_IP_GET = MESSAGES.indexOf('ip_get'),
+    MESSAGES = {
+        'ip_get': 1,
+        'user_count': 2,
+        'user_subscribe': 3,
+        'user_unsubscribe': 4,
+    },
+    MSG_IP_GET = MESSAGES['ip_get'],
     server;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,25 +48,27 @@ describe('server', () => {
 beforeAll(async () => {
     server = new Server(MESSAGES);
     await server.initialise({
-        dev: {},
+        dev: {error: 0},
         dirname: __dirname,
         home: 'server',
     });
 });
 afterAll(async () => {
-    // await server.destroy();
+    await server.destroy();
 });
 
-// handle_request
+// handleRequest
 [
     ['api', {}, '[-1,0,{}]'],
     ['api', {body: [MSG_IP_GET]}, `[${MSG_IP_GET},null]`],
+    ['api', {body: `${MSG_IP_GET}`}, `[${MSG_IP_GET},null]`],
     ['api', {body: [MSG_IP_GET], headers: {'x-real-ip': '145.23.11.99'}}, `[${MSG_IP_GET},"145.23.11.99"]`],
+    ['api', {body: `${MSG_IP_GET}`, headers: {'x-real-ip': '145.23.11.99'}}, `[${MSG_IP_GET},"145.23.11.99"]`],
 ].forEach(([type, query, answer], id) => {
-    test(`handle_request:${id}`, async () => {
+    test(`handleRequest:${id}`, async () => {
         let req = {...dummy_request, ...query},
             res = new DummyResponse();
-        await server.handle_request(type, req, res);
+        await server.handleRequest(type, req, res);
         if (IsArray(answer)) {
             let json = ParseJSON(res.data);
             expect(json[0]).toEqual(answer[0]);
@@ -74,13 +79,13 @@ afterAll(async () => {
     });
 });
 
-// handle_socket
+// handleSocket
 [
     [[], ''],
 ].forEach(([json, answer], id) => {
-    test(`handle_socket:${id}`, async () => {
+    test(`handleSocket:${id}`, async () => {
         let socket = new DummySocket();
-        await server.handle_socket(socket, json);
+        await server.handleSocket(socket, json);
         let data = socket.data;
         if (IsArray(answer)) {
             let json = ParseJSON(data);
